@@ -1,6 +1,12 @@
 # @mongolian-payment/qpay
 
-QPay V2 payment SDK for Node.js. Create invoices, check payments, manage refunds.
+QPay V2 payment SDK for Node.js — create invoices, check payments, manage refunds.
+
+[![npm version](https://img.shields.io/npm/v/@mongolian-payment/qpay.svg)](https://www.npmjs.com/package/@mongolian-payment/qpay)
+[![license](https://img.shields.io/npm/l/@mongolian-payment/qpay.svg)](./LICENSE)
+
+> Part of the **[mongolian-payment](https://github.com/mongolian-payment)** SDK suite.
+> Also available for Python: **[mongolian-payment-qpay](https://pypi.org/project/mongolian-payment-qpay/)** ([source](https://github.com/mongolian-payment/qpay-py)).
 
 ## Requirements
 
@@ -35,23 +41,18 @@ const invoice = await client.createInvoice({
   amount: 50000,
 });
 
-console.log(invoice.qrText);      // QR code content
+console.log(invoice.qrText);       // QR code content
 console.log(invoice.qPayShortUrl); // Short URL for payment
 console.log(invoice.urls);         // Deep links for bank apps
 
 // Check payment status
-const payment = await client.checkPayment({
-  invoiceId: invoice.invoiceId,
-});
-
+const payment = await client.checkPayment({ invoiceId: invoice.invoiceId });
 if (payment.paidAmount > 0) {
   console.log("Payment received!");
 }
 ```
 
-## Environment Variable Configuration
-
-You can load configuration from environment variables:
+## Configuration from Environment Variables
 
 ```typescript
 import { QPayClient, loadConfigFromEnv } from "@mongolian-payment/qpay";
@@ -59,109 +60,57 @@ import { QPayClient, loadConfigFromEnv } from "@mongolian-payment/qpay";
 const client = new QPayClient(loadConfigFromEnv());
 ```
 
-Set the following environment variables:
+| Variable            | Description                       |
+| ------------------- | --------------------------------- |
+| `QPAY_USERNAME`     | QPay API username                 |
+| `QPAY_PASSWORD`     | QPay API password                 |
+| `QPAY_ENDPOINT`     | API base URL                      |
+| `QPAY_CALLBACK`     | Payment notification callback URL |
+| `QPAY_INVOICE_CODE` | Invoice code assigned by QPay     |
+| `QPAY_MERCHANT_ID`  | Merchant ID assigned by QPay      |
 
-| Variable            | Description                          |
-| ------------------- | ------------------------------------ |
-| `QPAY_USERNAME`     | QPay API username                    |
-| `QPAY_PASSWORD`     | QPay API password                    |
-| `QPAY_ENDPOINT`     | API base URL                         |
-| `QPAY_CALLBACK`     | Payment notification callback URL    |
-| `QPAY_INVOICE_CODE` | Invoice code assigned by QPay        |
-| `QPAY_MERCHANT_ID`  | Merchant ID assigned by QPay         |
+> Never hard-code credentials — load them from the environment or a secrets vault.
 
 ## API Reference
 
-### `new QPayClient(config)`
+Authentication is automatic — the client logs in on the first request and refreshes
+the token when it expires.
 
-Creates a new QPay client. Authentication is handled automatically -- the client logs in on the first request and refreshes the token when it expires.
-
-### Invoice Methods
-
-#### `client.createInvoice(input)`
-
-Create a new payment invoice.
+| Method | Description |
+|--------|-------------|
+| `createInvoice(input)` | Create a payment invoice → `{ invoiceId, qPayShortUrl, qrText, qrImage, urls }` |
+| `getInvoice(invoiceId)` | Get invoice details |
+| `cancelInvoice(invoiceId)` | Cancel an invoice |
+| `checkPayment(options)` | Check payment status for an invoice |
+| `getPayment(paymentId)` | Get details for a specific payment |
+| `cancelPayment(options?)` | Cancel a payment |
+| `refundPayment(paymentId)` | Refund a payment |
 
 ```typescript
+// createInvoice accepts optional query params appended to the callback URL
 const invoice = await client.createInvoice({
   senderCode: "SENDER_001",
   senderBranchCode: "BRANCH_001",
   receiverCode: "RECEIVER_001",
   description: "Payment for order",
   amount: 10000,
-  callbackParam: { orderId: "abc123" }, // optional query params appended to callback URL
+  callbackParam: { orderId: "abc123" },
 });
-```
 
-Returns: `QPayInvoiceResponse` with `invoiceId`, `qPayShortUrl`, `qrText`, `qrImage`, and `urls` (deep links).
+const details = await client.getInvoice(invoice.invoiceId);
+console.log(details.invoiceStatus, details.totalAmount);
 
-#### `client.getInvoice(invoiceId)`
-
-Get invoice details.
-
-```typescript
-const details = await client.getInvoice("invoice_id_here");
-console.log(details.invoiceStatus); // "OPEN", "CLOSED", etc.
-console.log(details.totalAmount);
-```
-
-#### `client.cancelInvoice(invoiceId)`
-
-Cancel an invoice.
-
-```typescript
-await client.cancelInvoice("invoice_id_here");
-```
-
-### Payment Methods
-
-#### `client.checkPayment(options)`
-
-Check payment status for an invoice.
-
-```typescript
 const result = await client.checkPayment({
-  invoiceId: "invoice_id_here",
-  pageNumber: 1,  // optional, default: 1
-  pageLimit: 100,  // optional, default: 100
+  invoiceId: invoice.invoiceId,
+  pageNumber: 1,  // optional, default 1
+  pageLimit: 100, // optional, default 100
 });
-
-console.log(result.count);      // number of payments
-console.log(result.paidAmount); // total paid
-console.log(result.rows);      // individual payment rows
-```
-
-#### `client.getPayment(paymentId)`
-
-Get details for a specific payment.
-
-```typescript
-const payment = await client.getPayment("payment_id_here");
-console.log(payment.paymentStatus); // "NEW", "PAID", "FAILED", "REFUNDED"
-```
-
-#### `client.cancelPayment(options?)`
-
-Cancel a payment.
-
-```typescript
-await client.cancelPayment({
-  callbackUrl: "https://yourapp.com/cancel-callback", // optional
-  note: "Customer requested cancellation",             // optional
-});
-```
-
-#### `client.refundPayment(paymentId)`
-
-Refund a payment.
-
-```typescript
-await client.refundPayment("payment_id_here");
+console.log(result.count, result.paidAmount, result.rows);
 ```
 
 ## Error Handling
 
-All API errors throw `QPayError` which includes the HTTP status code and response body:
+All API errors throw `QPayError`, which includes the HTTP status code and response body:
 
 ```typescript
 import { QPayError } from "@mongolian-payment/qpay";
